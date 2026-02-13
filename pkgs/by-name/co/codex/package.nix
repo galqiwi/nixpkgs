@@ -3,9 +3,6 @@
   stdenv,
   fetchurl,
   makeBinaryWrapper,
-  autoPatchelfHook,
-  openssl,
-  zlib,
   ripgrep,
   versionCheckHook,
 }:
@@ -13,14 +10,14 @@ let
   version = "0.101.0";
   sources = {
     "x86_64-linux" = {
-      url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-x86_64-unknown-linux-gnu.tar.gz";
-      hash = "sha256-6XMt47hw32o5zkukRplhDvWBhDlneTRX+O8R86WlgjY=";
-      binary = "codex-x86_64-unknown-linux-gnu";
+      url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-x86_64-unknown-linux-musl.tar.gz";
+      hash = "sha256-/zY/hZfb8Dg8F2WefJJzW6qZG+irmflnxcw8aLMpJ3w=";
+      binary = "codex-x86_64-unknown-linux-musl";
     };
     "aarch64-linux" = {
-      url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-aarch64-unknown-linux-gnu.tar.gz";
-      hash = "sha256-58iTq6BCDhcU8J4PTNJZ0Yz2PPEIVeioHybomm+gJHQ=";
-      binary = "codex-aarch64-unknown-linux-gnu";
+      url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-aarch64-unknown-linux-musl.tar.gz";
+      hash = "sha256-9cSxFHMyocxBCLd2x1nue0CdNl5YMKTllmfh+cfm2mA=";
+      binary = "codex-aarch64-unknown-linux-musl";
     };
     "x86_64-darwin" = {
       url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-x86_64-apple-darwin.tar.gz";
@@ -43,13 +40,9 @@ stdenv.mkDerivation {
     inherit (srcInfo) url hash;
   };
 
-  nativeBuildInputs =
-    [
-      makeBinaryWrapper
-    ]
-    ++ lib.optionals stdenv.hostPlatform.isLinux [ autoPatchelfHook ];
-
-  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [ openssl zlib stdenv.cc.cc.lib ];
+  nativeBuildInputs = [
+    makeBinaryWrapper
+  ];
 
   dontUnpack = true;
 
