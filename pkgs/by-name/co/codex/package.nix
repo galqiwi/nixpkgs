@@ -2,14 +2,12 @@
   lib,
   stdenv,
   fetchurl,
-  installShellFiles,
   makeBinaryWrapper,
   autoPatchelfHook,
   openssl,
   zlib,
   ripgrep,
   versionCheckHook,
-  installShellCompletions ? stdenv.buildPlatform.canExecute stdenv.hostPlatform,
 }:
 let
   version = "0.101.0";
@@ -47,7 +45,6 @@ stdenv.mkDerivation {
 
   nativeBuildInputs =
     [
-      installShellFiles
       makeBinaryWrapper
     ]
     ++ lib.optionals stdenv.hostPlatform.isLinux [ autoPatchelfHook ];
@@ -62,13 +59,6 @@ stdenv.mkDerivation {
     tar -xzf $src
     install -m755 ${srcInfo.binary} $out/bin/codex
     runHook postInstall
-  '';
-
-  postInstall = lib.optionalString installShellCompletions ''
-    installShellCompletion --cmd codex \
-      --bash <($out/bin/codex completion bash) \
-      --fish <($out/bin/codex completion fish) \
-      --zsh <($out/bin/codex completion zsh)
   '';
 
   postFixup = ''
