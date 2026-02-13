@@ -1,84 +1,68 @@
 {
   lib,
   stdenv,
-  rustPlatform,
-  fetchFromGitHub,
+  fetchurl,
   installShellFiles,
-  clang,
-  cmake,
-  gitMinimal,
-  libclang,
   makeBinaryWrapper,
-  nix-update-script,
-  pkg-config,
+  autoPatchelfHook,
   openssl,
+  zlib,
   ripgrep,
   versionCheckHook,
   installShellCompletions ? stdenv.buildPlatform.canExecute stdenv.hostPlatform,
 }:
-rustPlatform.buildRustPackage (finalAttrs: {
-  pname = "codex";
+let
   version = "0.101.0";
-
-  src = fetchFromGitHub {
-    owner = "openai";
-    repo = "codex";
-    tag = "rust-v${finalAttrs.version}";
-    hash = "sha256-m2Jq7fbSXQ/O3bNBr6zbnQERhk2FZXb+AlGZsHn8GuQ=";
-  };
-
-  sourceRoot = "${finalAttrs.src.name}/codex-rs";
-
-  cargoLock = {
-    lockFile = ./Cargo.lock;
-    outputHashes = {
-      "crossterm-0.28.1" = "sha256-6qCtfSMuXACKFb9ATID39XyFDIEMFDmbx6SSmNe+728=";
-      "nucleo-0.5.0" = "sha256-Hm4SxtTSBrcWpXrtSqeO0TACbUxq3gizg1zD/6Yw/sI=";
-      "nucleo-matcher-0.3.1" = "sha256-Hm4SxtTSBrcWpXrtSqeO0TACbUxq3gizg1zD/6Yw/sI=";
-      "ratatui-0.29.0" = "sha256-HBvT5c8GsiCxMffNjJGLmHnvG77A6cqEL+1ARurBXho=";
-      "runfiles-0.1.0" = "sha256-uJpVLcQh8wWZA3GPv9D8Nt43EOirajfDJ7eq/FB+tek=";
-      "tokio-tungstenite-0.28.0" = "sha256-hJAkvWxDjB9A9GqansahWhTmj/ekcelslLUTtwqI7lw=";
-      "tungstenite-0.27.0" = "sha256-AN5wql2X2yJnQ7lnDxpljNw0Jua40GtmT+w3wjER010=";
+  sources = {
+    "x86_64-linux" = {
+      url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-x86_64-unknown-linux-gnu.tar.gz";
+      hash = "sha256-6XMt47hw32o5zkukRplhDvWBhDlneTRX+O8R86WlgjY=";
+      binary = "codex-x86_64-unknown-linux-gnu";
+    };
+    "aarch64-linux" = {
+      url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-aarch64-unknown-linux-gnu.tar.gz";
+      hash = "sha256-58iTq6BCDhcU8J4PTNJZ0Yz2PPEIVeioHybomm+gJHQ=";
+      binary = "codex-aarch64-unknown-linux-gnu";
+    };
+    "x86_64-darwin" = {
+      url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-x86_64-apple-darwin.tar.gz";
+      hash = "sha256-UdTjUXx18JMxMr4zZfM7CANtQ9PCBpKzD1zDbdPqw+k=";
+      binary = "codex-x86_64-apple-darwin";
+    };
+    "aarch64-darwin" = {
+      url = "https://github.com/openai/codex/releases/download/rust-v${version}/codex-aarch64-apple-darwin.tar.gz";
+      hash = "sha256-/Ah+kAK+DhcL/qonZZ43eCHhWrl4tKSQde+V21+CB/g=";
+      binary = "codex-aarch64-apple-darwin";
     };
   };
+  srcInfo = sources.${stdenv.hostPlatform.system} or (throw "unsupported platform ${stdenv.hostPlatform.system}");
+in
+stdenv.mkDerivation {
+  pname = "codex";
+  inherit version;
 
-  nativeBuildInputs = [
-    clang
-    cmake
-    gitMinimal
-    installShellFiles
-    makeBinaryWrapper
-    pkg-config
-  ];
-
-  buildInputs = [
-    libclang
-    openssl
-  ];
-
-  # NOTE: set LIBCLANG_PATH so bindgen can locate libclang, and adjust
-  # warning-as-error flags to avoid known false positives (GCC's
-  # stringop-overflow in BoringSSL's a_bitstr.cc) while keeping Clang's
-  # character-conversion warning-as-error disabled.
-  env = {
-    LIBCLANG_PATH = "${lib.getLib libclang}/lib";
-    NIX_CFLAGS_COMPILE = toString (
-      lib.optionals stdenv.cc.isGNU [
-        "-Wno-error=stringop-overflow"
-      ]
-      ++ lib.optionals stdenv.cc.isClang [
-        "-Wno-error=character-conversion"
-      ]
-    );
+  src = fetchurl {
+    inherit (srcInfo) url hash;
   };
 
-  # NOTE: part of the test suite requires access to networking, local shells,
-  # apple system configuration, etc. since this is a very fast moving target
-  # (for now), with releases happening every other day, constantly figuring out
-  # which tests need to be skipped, or finding workarounds, was too burdensome,
-  # and in practice not adding any real value. this decision may be reversed in
-  # the future once this software stabilizes.
-  doCheck = false;
+  nativeBuildInputs =
+    [
+      installShellFiles
+      makeBinaryWrapper
+    ]
+    ++ lib.optionals stdenv.hostPlatform.isLinux [ autoPatchelfHook ];
+
+  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [ openssl zlib stdenv.cc.cc.lib ];
+
+  dontUnpack = true;
+
+  installPhase = ''
+    runHook preInstall
+    mkdir -p $out/bin
+    tar -xzf $src
+    install -m755 ${srcInfo.binary} $out/bin/codex
+    runHook postInstall
+  '';
 
   postInstall = lib.optionalString installShellCompletions ''
     installShellCompletion --cmd codex \
@@ -94,19 +78,10 @@ rustPlatform.buildRustPackage (finalAttrs: {
   doInstallCheck = true;
   nativeInstallCheckInputs = [ versionCheckHook ];
 
-  passthru = {
-    updateScript = nix-update-script {
-      extraArgs = [
-        "--version-regex"
-        "^rust-v(\\d+\\.\\d+\\.\\d+)$"
-      ];
-    };
-  };
-
   meta = {
     description = "Lightweight coding agent that runs in your terminal";
     homepage = "https://github.com/openai/codex";
-    changelog = "https://raw.githubusercontent.com/openai/codex/refs/tags/rust-v${finalAttrs.version}/CHANGELOG.md";
+    changelog = "https://raw.githubusercontent.com/openai/codex/refs/tags/rust-v${version}/CHANGELOG.md";
     license = lib.licenses.asl20;
     mainProgram = "codex";
     maintainers = with lib.maintainers; [
@@ -115,4 +90,4 @@ rustPlatform.buildRustPackage (finalAttrs: {
     ];
     platforms = lib.platforms.unix;
   };
-})
+}
